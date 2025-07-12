@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML5实时智能选股系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
+    <style>
+        :root {
+            --primary: #3a86ff;
+            --secondary: #ff006e;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --success: #38b000;
+            --warning: #ff9e00;
+            --danger: #e63946;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            color: #343a40;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, var(--primary), #5a4fcf);
+        }
+        
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+            background: white;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+        
+        .card-header {
+            border-radius: 12px 12px 0 0 !important;
+            font-weight: 600;
+            background: linear-gradient(to right, #f8f9fa, #e9ecef);
+            color: var(--dark);
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        .positive {
+            color: #e63946;
+            font-weight: 600;
+        }
+        
+        .negative {
+            color: #2a9d8f;
+            font-weight: 600;
+        }
+        
+        .table-hover tbody tr {
+            transition: background-color 0.2s;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(58, 134, 255, 0.05);
+        }
+        
+        .signal-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        
+        .signal-buy { background-color: #e63946; }
+        .signal-sell { background-color: #2a9d8f; }
+        .signal-hold { background-color: #ffb703; }
+        
+        .strategy-toggle {
+            background: none;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .strategy-toggle i {
+            transition: transform 0.3s ease;
+        }
+        
+        .strategy-card.collapsed i {
+            transform: rotate(-90deg);
+        }
+        
+        .strategy-content {
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .strategy-card.collapsed .strategy-content {
+            max-height: 0 !important;
+            opacity: 0;
+        }
+        
+        .formula-card {
+            background-color: var(--light);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .formula-card h6 {
+            position: relative;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .formula-card h6::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 40px;
+            height: 3px;
+            background-color: var(--primary);
+            border-radius: 3px;
+        }
+        
+        .formula-card pre {
+            background-color: #f0f4f8;
+            border-left: 4px solid var(--primary);
+            font-size: 0.85rem;
+            padding: 15px;
+            border-radius: 0 6px 6px 0;
+            margin: 0;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(58, 134, 255, 0.05), white);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        .api-status {
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .api-active { 
+            background-color: rgba(42, 157, 143, 0.15); 
+            color: #2a9d8f;
+        }
+        .api-active::before { background-color: #2a9d8f; }
+        
+        .api-inactive { 
+            background-color: rgba(108, 117, 125, 0.15); 
+            color: #6c757d; 
+        }
+        .api-inactive::before { background-color: #6c757d; }
+        
+        .api-error { 
+            background-color: rgba(230, 57, 70, 0.15); 
+            color: #e63946; 
+        }
+        .api-error::before { background-color: #e63946; }
+        
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+        
+        .section-title {
+            position: relative;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            color: var(--dark);
+        }
+        
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background-color: var(--primary);
+            border-radius: 3px;
+        }
+        
+        .stat-badge {
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #5a4fcf);
+            border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(58, 134, 255, 0.3);
+        }
+        
+        .btn-outline-primary {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-outline-primary:hover {
+            background: linear-gradient(135deg, var(--primary), #5a4fcf);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(58, 134, 255, 0.3);
+        }
+        
+        .api-status-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        
+        .latency-indicator {
+            height: 10px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #38b000, #ff9e00, #e63946);
+            margin-top: 5px;
+        }
+        
+        .latency-value {
+            position: absolute;
+            top: -20px;
+            right: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .latency-container {
+            position: relative;
+            padding-top: 25px;
+        }
+        
+        .network-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+            color: var(--primary);
+        }
+        
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-connected {
+            background-color: rgba(42, 157, 143, 0.15);
+            color: #2a9d8f;
+        }
+        
+        .status-disconnected {
+            background-color: rgba(230, 57, 70, 0.15);
+            color: #e63946;
+        }
+        
+        .status-connecting {
+            background-color: rgba(255, 158, 0, 0.15);
+            color: #ff9e00;
+        }
+        
+        /* HTML5新增的动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        .sticky-top {
+            position: sticky;
+            top: 1rem;
+            z-index: 1020;
+        }
+        
+        /* 响应式布局优化 */
+        @media (max-width: 992px) {
+            .chart-container {
+                height: 200px;
+            }
+            
+            .table-responsive {
+                overflow-x: auto;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .navbar .d-flex {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .api-status {
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <svg width="30" height="30" class="me-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12H16" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M12 16V8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>HTML5智能选股系统</span>
+            </a>
+            <div class="d-flex align-items-center">
+                <div class="api-status api-active me-3" id="apiStatus">
+                    <svg width="16" height="16" fill="currentColor" class="bi bi-wifi me-1" viewBox="0 0 16 16">
+                        <path d="M15.384 6.115a.485.485 0 0 0-.047-.736A12.444 12.444 0 0 0 8 3C5.259 3 2.723 3.882.663 5.379a.485.485 0 0 0-.048.736.518.518 0 0 0 .668.05A11.448 11.448 0 0 1 8 4c2.507 0 4.827.802 6.716 2.164.205.148.49.13.668-.049z"/>
+                        <path d="M13.229 8.271a.482.482 0 0 0-.063-.745A9.455 9.455 0 0 0 8 6c-1.905 0-3.68.56-5.166 1.526a.48.48 0 0 0-.063.745.525.525 0 0 0 .652.065A8.46 8.46 0 0 1 8 7a8.46 8.46 0 0 1 4.576 1.336c.206.132.48.108.653-.065zm-2.183 2.183c.226-.226.185-.605-.1-.75A6.473 6.473 0 0 0 8 9c-1.06 0-2.062.254-2.946.704-.285.145-.326.524-.1.75l.015.015c.16.16.407.19.611.09A5.478 5.478 0 0 1 8 10c.868 0 1.69.201 2.42.56.203.1.45.07.611-.091l.015-.015zM9.06 12.44c.196-.196.198-.52-.04-.66A1.99 1.99 0 0 0 8 11.5a1.99 1.99 0 0 0-1.02.28c-.238.14-.236.464-.04.66l.706.706a.5.5 0 0 0 .708 0l.707-.707z"/>
+                    </svg>
+                    <span>数据源已连接</span>
+                </div>
+                <button class="btn btn-light me-2" id="refreshBtn">
+                    <svg width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise me-1" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                    </svg>
+                    刷新数据
+                </button>
+                <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                    <svg width="16" height="16" fill="currentColor" class="bi bi-sliders me-1" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3h9.05zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8h2.05zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1h9.05z"/>
+                    </svg>
+                    设置
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="section-title">股票筛选分析</h3>
+            <div class="text-muted small">更新时间: <span id="updateTime">--:--:--</span></div>
+        </div>
+        
+        <!-- API状态面板 -->
+        <div class="api-status-panel">
+            <div class="row align-items-center">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="d-flex align-items-center">
+                        <svg width="24" height="24" fill="currentColor" class="network-icon" viewBox="0 0 16 16">
+                            <path d="M15.384 6.115a.485.485 0 0 0-.047-.736A12.444 12.444 0 0 0 8 3C5.259 3 2.723 3.882.663 5.379a.485.485 0 0 0-.048.736.518.518 0 0 0 .668.05A11.448 11.448 0 0 1 8 4c2.507 0 4.827.802 6.716 2.164.205.148.49.13.668-.049z"/>
+                            <path d="M13.229 8.271a.482.482 0 0 0-.063-.745A9.455 9.455 0 0 0 8 6c-1.905 0-3.68.56-5.166 1.526a.48.48 0 0 0-.063.745.525.525 0 0 0 .652.065A8.46 8.46 0 0 1 8 7a8.46 8.46 0 0 1 4.576 1.336c.206.132.48.108.653-.065zm-2.183 2.183c.226-.226.185-.605-.1-.75A6.473 6.473 0 0 0 8 9c-1.06 0-2.062.254-2.946.704-.285.145-.326.524-.1.75l.015.015c.16.16.407.19.611.09A5.478 5.478 0 0 1 8 10c.868 0 1.69.201 2.42.56.203.1.45.07.611-.091l.015-.015zM9.06 12.44c.196-.196.198-.52-.04-.66A1.99 1.99 0 0 0 8 11.5a1.99 1.99 0 0 0-1.02.28c-.238.14-.236.464-.04.66l.706.706a.5.5 0 0 0 .708 0l.707-.707z"/>
+                        </svg>
+                        <div>
+                            <div class="text-muted small">API连接状态</div>
+                            <div class="d-flex align-items-center">
+                                <span class="status-badge status-connected me-2" id="apiStatusBadge">已连接</span>
+                                <span id="apiStatusText">数据源正常</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="d-flex align-items-center">
+                        <svg width="24" height="24" fill="currentColor" class="network-icon" viewBox="0 0 16 16">
+                            <path d="M8.5 4.5a.5.5 0 0 0-1 0v3.5H4a.5.5 0 0 0 0 1h3.5V12a.5.5 0 0 0 1 0V9H12a.5.5 0 0 0 0-1H9V4.5z"/>
+                            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 13V2a6 6 0 1 1 0 12z"/>
+                        </svg>
+                        <div>
+                            <div class="text-muted small">网络延迟</div>
+                            <div class="latency-container">
+                                <span class="latency-value" id="latencyValue">-- ms</span>
+                                <div class="latency-indicator">
+                                    <div class="progress-bar bg-success" id="latencyBar" style="width: 0%; height: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <svg width="24" height="24" fill="currentColor" class="network-icon" viewBox="0 0 16 16">
+                            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                            <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM1 8a7 7 0 1 1 14 0A7 7 0 0 1 1 8z"/>
+                        </svg>
+                        <div>
+                            <div class="text-muted small">数据更新频率</div>
+                            <div class="d-flex align-items-center">
+                                <span id="refreshFrequency">10秒</span>
+                                <button class="btn btn-sm btn-outline-primary ms-2 py-0" id="changeFrequencyBtn">更改</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- 左侧选股公式面板 -->
+            <div class="col-lg-4">
+                <div class="card sticky-top">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>策略配置面板</span>
+                        <button id="toggleAllBtn" class="btn btn-sm btn-outline-primary py-0">全部隐藏</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label fw-medium mb-3">策略选择</label>
+                            <select class="form-select" id="strategySelect">
+                                <option value="multiMA">均线多头排列策略</option>
+                                <option value="volumeBreak">成交量突破策略</option>
+                                <option value="bottomFishing">屠龙抄底策略</option>
+                                <option value="slope45">45度斜率多头</option>
+                            </select>
+                        </div>
+                        
+                        <h5 class="mb-3">选股策略</h5>
+                        
+                        <!-- 策略1：均线多头 -->
+                        <div class="strategy-card mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="strategy-toggle" data-target="strategy1">
+                                    <svg width="16" height="16" fill="currentColor" class="bi bi-chevron-down me-1" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                    <span>均线多头排列策略</span>
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="strategyToggle1" checked>
+                                </div>
+                            </div>
+                            <div class="strategy-content" id="strategy1" style="max-height: 300px;">
+                                <div class="formula-card p-3">
+                                    <p class="small text-muted mb-2">要求5日、10日、20日均线向上发散排列</p>
+                                    <pre>MA5 := MA(CLOSE,5);
+MA10 := MA(CLOSE,10);
+MA20 := MA(CLOSE,20);
+多头排列: MA5 > MA10 AND MA10 > MA20 
+    AND MA5 > REF(MA5,1) 
+    AND MA10 > REF(MA10,1)
+    AND MA20 > REF(MA20,1);</pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 策略2：成交量突破 -->
+                        <div class="strategy-card mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="strategy-toggle" data-target="strategy2">
+                                    <svg width="16" height="16" fill="currentColor" class="bi bi-chevron-down me-1" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                    <span>成交量突破策略</span>
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="strategyToggle2" checked>
+                                </div>
+                            </div>
+                            <div class="strategy-content" id="strategy2" style="max-height: 300px;">
+                                <div class="formula-card p-3">
+                                    <p class="small text-muted mb-2">当日成交量大于前5日平均成交量150%</p>
+                                    <pre>VOL_MA5 := MA(VOLUME,5);
+成交量突破: VOLUME > VOL_MA5 * 1.5 
+    AND CLOSE > OPEN 
+    AND CLOSE > REF(CLOSE,1);</pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 策略3：屠龙抄底 -->
+                        <div class="strategy-card mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="strategy-toggle" data-target="strategy3">
+                                    <svg width="16" height="16" fill="currentColor" class="bi bi-chevron-down me-1" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                    <span>屠龙抄底策略</span>
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="strategyToggle3" checked>
+                                </div>
+                            </div>
+                            <div class="strategy-content" id="strategy3" style="max-height: 300px;">
+                                <div class="formula-card p-3">
+                                    <p class="small text-muted mb-2">股价创60日新低后放量反弹</p>
+                                    <pre>新低 := LOW <= LLV(LOW,60);
+反弹 := CLOSE > OPEN 
+    AND (CLOSE/OPEN > 1.03 
+    OR CLOSE > 1.03 * REF(CLOSE,1));
+抄底信号: 新低 AND 反弹;</pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 策略4：45度斜率 -->
+                        <div class="strategy-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="strategy-toggle" data-target="strategy4">
+                                    <svg width="16" height="16" fill="currentColor" class="bi bi-chevron-down me-1" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                                    </svg>
+                                    <span>45度斜率多头</span>
+                                </button>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="strategyToggle4" checked>
+                                </div>
+                            </div>
+                            <div class="strategy-content" id="strategy4" style="max-height: 300px;">
+                                <div class="formula-card p-3">
+                                    <p class="small text-muted mb-2">均线呈45度以上陡峭上升</p>
+                                    <pre>MA5 := MA(CLOSE,5);
+MA10 := MA(CLOSE,10);
+角度5 := ATAN((MA5/REF(MA5,1)-1)*100)*180/3.1416 > 45;
+角度10 := ATAN((MA10/REF(MA10,1)-1)*100)*180/3.1416 > 45;
+选股: MA5 > MA10 AND 角度5 AND 角度10;</pre>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid mt-4">
+                            <button class="btn btn-primary" id="runScreening">
+                                <svg width="18" height="18" fill="currentColor" class="bi bi-funnel me-2" viewBox="0 0 16 16">
+                                    <path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2h-11z"/>
+                                </svg>
+                                执行选股
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">市场概览</div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="marketChart"></canvas>
+                        </div>
+                        <div class="row mt-3 g-2">
+                            <div class="col-6">
+                                <div class="bg-light p-3 rounded text-center">
+                                    <div class="text-muted small">沪深300</div>
+                                    <div class="fw-bold fs-5 positive" id="hs300Change">+1.25%</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-light p-3 rounded text-center">
+                                    <div class="text-muted small">创业板指</div>
+                                    <div class="fw-bold fs-5 negative" id="cybChange">-0.42%</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-light p-3 rounded text-center">
+                                    <div class="text-muted small">上涨家数</div>
+                                    <div class="fw-bold fs-5" id="upCount">2189</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-light p-3 rounded text-center">
+                                    <div class="text-muted small">下跌家数</div>
+                                    <div class="fw-bold fs-5" id="downCount">1567</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧选股结果 -->
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>选股结果</span>
+                        <div class="d-flex">
+                            <span class="stat-badge bg-primary text-white me-2">
+                                筛选: <span id="resultCount">0</span> 只
+                            </span>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                                <label class="form-check-label small" for="autoRefresh">自动刷新</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>股票代码</th>
+                                        <th>股票名称</th>
+                                        <th>最新价</th>
+                                        <th>涨跌幅</th>
+                                        <th>成交量(万手)</th>
+                                        <th>5日均线</th>
+                                        <th>10日均线</th>
+                                        <th>20日均线</th>
+                                        <th>触发策略</th>
+                                        <th>信号强度</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockResults">
+                                    <!-- 选股结果将通过JavaScript动态生成 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div>
+                                <span class="me-3">符合条件的股票: <strong id="resultCount">0</strong> 只</span>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                                    <label class="form-check-label" for="autoRefresh">自动刷新(10秒)</label>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary">导出结果</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header">策略表现分析</div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="strategyChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header">个股走势分析</div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="stockChart"></canvas>
+                                </div>
+                                <div class="mt-3">
+                                    <select class="form-select" id="stockSelect">
+                                        <option>选择股票查看详情</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">系统设置 - 数据API配置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3">数据源设置</h6>
+                        <div class="mb-3">
+                            <label class="form-label">API提供商</label>
+                            <select class="form-select" id="apiProvider">
+                                <option value="mock">模拟数据</option>
+                                <option value="sina">新浪财经API (免费)</option>
+                                <option value="tencent">腾讯财经API (免费)</option>
+                                <option value="alpha">Alpha Vantage (需API Key)</option>
+                                <option value="custom">自定义API</option>
+                            </select>
+                        </div>
+                        
+                        <div id="apiKeyField" class="mb-3" style="display:none;">
+                            <label class="form-label">API Key</label>
+                            <input type="text" class="form-control" id="apiKey" placeholder="请输入API密钥">
+                        </div>
+                        
+                        <div id="customApiField" class="mb-3" style="display:none;">
+                            <label class="form-label">自定义API地址</label>
+                            <input type="text" class="form-control" id="customApiUrl" placeholder="https://api.example.com/data">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">股票代码筛选范围</label>
+                            <textarea class="form-control" id="stockCodes" rows="3" placeholder="输入股票代码，每行一个。示例：&#10;000001.SZ &#10;600000.SH &#10;AAPL"></textarea>
+                            <div class="form-text">留空表示使用系统默认股票池</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2 mb-3">刷新设置</h6>
+                        <div class="mb-3">
+                            <label class="form-label">刷新间隔(秒)</label>
+                            <input type="range" class="form-range" min="5" max="60" value="10" id="refreshInterval">
+                            <div class="text-end"><span id="intervalValue">10</span> 秒</div>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="realtimePush" checked>
+                            <label class="form-check-label">启用实时推送</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveSettings">保存并连接API</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 股票数据处理核心模块
+        const StockDataProcessor = {
+            // 计算移动平均线
+            calculateMA: function(data, period) {
+                const ma = [];
+                for (let i = 0; i < data.length; i++) {
+                    if (i < period - 1) {
+                        ma.push(null);
+                    } else {
+                        let sum = 0;
+                        for (let j = 0; j < period; j++) {
+                            sum += data[i - j];
+                        }
+                        ma.push(sum / period);
+                    }
+                }
+                return ma;
+            },
+            
+            // 计算涨跌幅
+            calculateChange: function(current, prev) {
+                return prev ? ((current - prev) / prev * 100).toFixed(2) : 0;
+            },
+            
+            // 计算角度
+            calculateAngle: function(ma, period) {
+                const angles = [];
+                for (let i = 1; i < ma.length; i++) {
+                    if (ma[i] === null || ma[i-1] === null) {
+                        angles.push(null);
+                    } else {
+                        const delta = ma[i] - ma[i-1];
+                        angles.push(Math.atan(delta / period) * 180 / Math.PI);
+                    }
+                }
+                return angles;
+            }
+        };
+
+        // API接口适配器
+        const StockAPIAdapter = {
+            currentProvider: 'mock',
+            apiKey: '',
+            customUrl: '',
+            selectedStocks: [],
+            
+            // 获取API端点
+            getEndpoint: function() {
+                switch(this.currentProvider) {
+                    case 'sina':
+                        return 'https://hq.sinajs.cn/list=';
+                    case 'tencent':
+                        return 'http://qt.gtimg.cn/q=';
+                    case 'alpha':
+                        return `https://www.alphavantage.co/query?apikey=${this.apiKey}&function=TIME_SERIES_DAILY_ADJUSTED&symbol=`;
+                    case 'custom':
+                        return this.customUrl;
+                    default:
+                        return null; // 模拟数据
+                }
+            },
+            
+            // 解析响应数据
+            parseResponse: function(data, symbol) {
+                switch(this.currentProvider) {
+                    case 'sina':
+                        return this.parseSinaData(data, symbol);
+                    case 'tencent':
+                        return this.parseTencentData(data, symbol);
+                    case 'alpha':
+                        return this.parseAlphaData(data, symbol);
+                    case 'custom':
+                        return this.parseCustomData(data, symbol);
+                    default:
+                        return this.generateMockData(symbol);
+                }
+            },
+            
+            // 解析新浪财经数据
+            parseSinaData: function(data, symbol) {
+                // 新浪返回格式：var hq_str_sh000001="上证指数,3269.32,..."
+                const match = data.match(/=\"(.*?)\"/);
+                if (!match || !match[1]) return null;
+                
+                const fields = match[1].split(',');
+                if (fields.length < 32) return null;
+                
+                return {
+                    symbol: symbol,
+                    name: fields[0],
+                    current: parseFloat(fields[3]),
+                    open: parseFloat(fields[1]),
+                    high: parseFloat(fields[4]),
+                    low: parseFloat(fields[5]),
+                    prevClose: parseFloat(fields[2]),
+                    volume: parseInt(fields[8]),
+                    turnover: parseFloat(fields[9]),
+                    time: fields[30] + " " + fields[31]
+                };
+            },
+            
+            // 解析腾讯财经数据
+            parseTencentData: function(data, symbol) {
+                // 腾讯返回格式：v_sz000858="51~五粮液~000858~142.60~..."
+                const match = data.match(/=\"(.*?)\"/);
+                if (!match || !match[1]) return null;
+                
+                const fields = match[1].split('~');
+                if (fields.length < 33) return null;
+                
+                return {
+                    symbol: symbol,
+                    name: fields[1],
+                    current: parseFloat(fields[3]),
+                    open: parseFloat(fields[6]),
+                    high: parseFloat(fields[33]),
+                    low: parseFloat(fields[34]),
+                    prevClose: parseFloat(fields[4]),
+                    volume: parseInt(fields[6]),
+                    time: fields[30]
+                };
+            },
+            
+            // 解析Alpha Vantage数据
+            parseAlphaData: function(data, symbol) {
+                try {
+                    const json = JSON.parse(data);
+                    if (json['Error Message']) return null;
+                    
+                    const lastRefreshed = json["Meta Data"]["3. Last Refreshed"];
+                    const dailyData = json["Time Series (Daily)"];
+                    const dates = Object.keys(dailyData).sort();
+                    const latest = dailyData[dates[dates.length-1]];
+                    
+                    return {
+                    symbol: symbol,
+                    name: symbol,
+                    current: parseFloat(latest['4. close']),
+                    open: parseFloat(latest['1. open']),
+                    high: parseFloat(latest['2. high']),
+                    low: parseFloat(latest['3. low']),
+                    prevClose: parseFloat(dailyData[dates[dates.length-2]]['4. close']),
+                    volume: parseInt(latest['6. volume']),
+                    time: lastRefreshed
+                    };
+                } catch (e) {
+                    console.error("解析Alpha数据出错:", e);
+                    return null;
+                }
+            },
+            
+            // 解析自定义API数据
+            parseCustomData: function(data, symbol) {
+                try {
+                    // 尝试解析为JSON
+                    const json = JSON.parse(data);
+                    // 这里可以根据自定义API的实际结构进行调整
+                    return {
+                        symbol: symbol,
+                        name: json.name || symbol,
+                        current: parseFloat(json.current || json.close || json.price),
+                        open: parseFloat(json.open),
+                        high: parseFloat(json.high),
+                        low: parseFloat(json.low),
+                        prevClose: parseFloat(json.prevClose || json.previousClose),
+                        volume: parseInt(json.volume),
+                        time: json.time || json.timestamp
+                    };
+                } catch (e) {
+                    // 如果JSON解析失败，尝试其他格式
+                    console.log("自定义API非JSON格式，尝试其他解析方式");
+                    return null;
+                }
+            },
+            
+            // 生成模拟数据
+            generateMockData: function(symbol) {
+                // 基本数据
+                const prev = 100 + Math.random() * 50;
+                const changePercent = (Math.random() - 0.5) * 5;
+                const current = prev * (1 + changePercent / 100);
+                
+                return {
+                    symbol: symbol,
+                    name: symbol.startsWith('6') ? '股票' + symbol.substr(2) : '股票' + symbol,
+                    current: current,
+                    open: prev * (1 + (Math.random() - 0.5) * 0.01),
+                    high: Math.max(current, prev) * (1 + Math.random() * 0.02),
+                    low: Math.min(current, prev) * (1 - Math.random() * 0.02),
+                    prevClose: prev,
+                    volume: Math.floor(Math.random() * 1000000) + 50000,
+                    time: new Date().toLocaleTimeString()
+                };
+            }
+        };
+
+        // 选股策略引擎
+        const StrategyEngine = {
+            multiMA: function(stock) {
+                return stock.ma5 > stock.ma10 && 
+                       stock.ma10 > stock.ma20 &&
+                       stock.ma5 > (stock.ma5 * 0.998) &&
+                       stock.ma10 > (stock.ma10 * 0.998) &&
+                       stock.ma20 > (stock.ma20 * 0.998);
+            },
+            
+            volumeBreak: function(stock) {
+                const avgVolume = stock.volume * 0.7; // 模拟5日平均成交量
+                return stock.volume > avgVolume * 1.5 && stock.change > 0;
+            },
+            
+            bottomFishing: function(stock) {
+                const isNewLow = stock.price < stock.prevClose * 0.95;
+                const isRebound = stock.change > 1.5 && stock.change < 5;
+                return isNewLow && isRebound;
+            },
+            
+            slope45: function(stock) {
+                const ma5Growth = (stock.ma5 - (stock.ma5 * 0.99)) / (stock.ma5 * 0.99) * 100;
+                const ma10Growth = (stock.ma10 - (stock.ma10 * 0.99)) / (stock.ma10 * 0.99) * 100;
+                return stock.ma5 > stock.ma10 && ma5Growth > 2 && ma10Growth > 1.5;
+            }
+        };
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM元素
+            const dom = {
+                apiStatus: document.getElementById('apiStatus'),
+                apiStatusBadge: document.getElementById('apiStatusBadge'),
+                apiStatusText: document.getElementById('apiStatusText'),
+                latencyBar: document.getElementById('latencyBar'),
+                latencyValue: document.getElementById('latencyValue'),
+                refreshBtn: document.getElementById('refreshBtn'),
+                runScreening: document.getElementById('runScreening'),
+                autoRefresh: document.getElementById('autoRefresh'),
+                stockResults: document.getElementById('stockResults'),
+                resultCount: document.getElementById('resultCount'),
+                updateTime: document.getElementById('updateTime'),
+                toggleAllBtn: document.getElementById('toggleAllBtn'),
+                strategySelect: document.getElementById('strategySelect'),
+                refreshFrequency: document.getElementById('refreshFrequency'),
+                changeFrequencyBtn: document.getElementById('changeFrequencyBtn'),
+                apiProvider: document.getElementById('apiProvider'),
+                apiKey: document.getElementById('apiKey'),
+                customApiUrl: document.getElementById('customApiUrl'),
+                apiKeyField: document.getElementById('apiKeyField'),
+                customApiField: document.getElementById('customApiField'),
+                saveSettings: document.getElementById('saveSettings'),
+                refreshInterval: document.getElementById('refreshInterval'),
+                intervalValue: document.getElementById('intervalValue'),
+                stockCodes: document.getElementById('stockCodes')
+            };
+            
+            let autoRefreshInterval;
+            let marketChart, strategyChart, stockChart;
+            let stockList = ["000001.SZ", "600000.SH", "000333.SZ", "600036.SH", "000651.SZ"];
+            
+            // 初始化图表
+            function initCharts() {
+                // 市场概览图
+                marketChart = new Chart(document.getElementById('marketChart'), {
+                    type: 'line',
+                    data: {
+                        labels: ['9:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00'],
+                        datasets: [{
+                            label: '沪深300',
+                            data: [3150, 3155, 3162, 3168, 3160, 3165, 3172, 3180, 3175, 3178],
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(58, 134, 255, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+
+                // 策略表现图
+                strategyChart = new Chart(document.getElementById('strategyChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['均线多头', '量能突破', '屠龙抄底', '45度斜率'],
+                        datasets: [{
+                            label: '本月收益率',
+                            data: [8.2, 5.7, 12.4, 9.8],
+                            backgroundColor: [
+                                '#3a86ff', '#ff006e', '#ff9e00', '#38b000'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+
+                // 个股走势图
+                stockChart = new Chart(document.getElementById('stockChart'), {
+                    type: 'line',
+                    data: {
+                        labels: ['T-5', 'T-4', 'T-3', 'T-2', 'T-1', '当日'],
+                        datasets: [{
+                            label: '股价走势',
+                            data: [45.2, 46.0, 45.5, 46.8, 47.2, 47.8],
+                            borderColor: '#ff006e',
+                            backgroundColor: 'rgba(255, 0, 110, 0.1)',
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+            
+            // 更新股票数据
+            async function fetchStockData() {
+                const provider = StockAPIAdapter.currentProvider;
+                const endpoint = StockAPIAdapter.getEndpoint();
+                const stocks = stockList;
+                
+                if (!endpoint) {
+                    console.log("使用模拟数据");
+                    return stocks.map(symbol => StockAPIAdapter.generateMockData(symbol));
+                }
+                
+                try {
+                    dom.apiStatus.className = "api-status api-active";
+                    dom.apiStatus.textContent = "API连接中...";
+                    dom.apiHealthBar.style.width = "70%";
+                    dom.apiHealthBar.className = "progress-bar progress-bar-striped progress-bar-animated";
+                    
+                    const promises = stocks.map(symbol => {
+                        const url = `${endpoint}${symbol}`;
+                        return fetch(url)
+                            .then(response => response.text())
+                            .then(data => StockAPIAdapter.parseResponse(data, symbol));
+                    });
+                    
+                    const results = await Promise.all(promises);
+                    const validResults = results.filter(r => r !== null);
+                    
+                    dom.apiStatus.textContent = "数据获取成功";
+                    dom.apiHealthBar.style.width = "100%";
+                    dom.apiHealthBar.className = "progress-bar bg-success";
+                    dom.lastFetchTime.textContent = new Date().toLocaleTimeString();
+                    
+                    return validResults;
+                } catch (error) {
+                    console.error("获取数据失败:", error);
+                    dom.apiStatus.className = "api-status api-error";
+                    dom.apiStatus.textContent = "API连接失败";
+                    dom.apiHealthBar.style.width = "30%";
+                    dom.apiHealthBar.className = "progress-bar bg-danger";
+                    
+                    // 失败时使用模拟数据
+                    return stocks.map(symbol => StockAPIAdapter.generateMockData(symbol));
+                }
+            }
+            
+            // 执行选股
+            async function runScreening() {
+                const selectedStrategy = document.getElementById('strategySelect').value;
+                const rawData = await fetchStockData();
+                
+                // 处理数据 - 添加技术指标
+                const processedData = rawData.map(stock => {
+                    // 计算涨跌幅
+                    const change = StockDataProcessor.calculateChange(stock.current, stock.prevClose);
+                    
+                    // 模拟历史数据计算均线
+                    const historyPrices = [];
+                    for (let i = 0; i < 30; i++) {
+                        // 生成模拟历史价格
+                        const basePrice = stock.prevClose * (0.95 + 0.1 * Math.random());
+                        historyPrices.push(basePrice);
+                    }
+                    historyPrices.push(stock.current); // 最后一个是当前价
+                    
+                    // 计算均线
+                    const ma5 = StockDataProcessor.calculateMA(historyPrices, 5);
+                    const ma10 = StockDataProcessor.calculateMA(historyPrices, 10);
+                    const ma20 = StockDataProcessor.calculateMA(historyPrices, 20);
+                    
+                    // 获取当前均线值
+                    const currentMA5 = ma5[ma5.length - 1];
+                    const currentMA10 = ma10[ma10.length - 1];
+                    const currentMA20 = ma20[ma20.length - 1];
+                    
+                    // 前一日均线值（用于趋势判断）
+                    const prevMA5 = ma5[ma5.length - 2] || currentMA5;
+                    const prevMA10 = ma10[ma10.length - 2] || currentMA10;
+                    const prevMA20 = ma20[ma20.length - 2] || currentMA20;
+                    
+                    return {
+                        ...stock,
+                        change: parseFloat(change),
+                        ma5: currentMA5,
+                        ma10: currentMA10,
+                        ma20: currentMA20,
+                        ma5_prev: prevMA5,
+                        ma10_prev: prevMA10,
+                        ma20_prev: prevMA20
+                    };
+                });
+                
+                // 应用策略筛选
+                const results = processedData.filter(stock => StrategyEngine[selectedStrategy](stock));
+                displayResults(results, selectedStrategy);
+            }
+            
+            // 显示选股结果
+            function displayResults(results, strategyName) {
+                const resultBody = document.getElementById('stockResults');
+                resultBody.innerHTML = '';
+                
+                results.forEach(stock => {
+                    const row = document.createElement('tr');
+                    row.classList.add('fade-in');
+                    
+                    // 确定信号强度
+                    let signalStrength = '';
+                    let signalClass = '';
+                    if (stock.change > 3) {
+                        signalStrength = '<span class="signal-indicator signal-buy"></span>强烈买入';
+                        signalClass = 'signal-buy';
+                    } else if (stock.change > 1) {
+                        signalStrength = '<span class="signal-indicator signal-buy"></span>买入';
+                        signalClass = 'signal-buy';
+                    } else {
+                        signalStrength = '<span class="signal-indicator signal-hold"></span>观望';
+                        signalClass = 'signal-hold';
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${stock.symbol}</td>
+                        <td><strong>${stock.name}</strong></td>
+                        <td>${stock.current.toFixed(2)}</td>
+                        <td class="${stock.change > 0 ? 'positive' : 'negative'}">
+                            ${stock.change > 0 ? '+' : ''}${stock.change.toFixed(2)}%
+                        </td>
+                        <td>${(stock.volume / 10000).toFixed(1)}</td>
+                        <td>${stock.ma5 ? stock.ma5.toFixed(2) : 'N/A'}</td>
+                        <td>${stock.ma10 ? stock.ma10.toFixed(2) : 'N/A'}</td>
+                        <td>${stock.ma20 ? stock.ma20.toFixed(2) : 'N/A'}</td>
+                        <td><span class="badge bg-primary">${strategyName}</span></td>
+                        <td class="${signalClass}">${signalStrength}</td>
+                    `;
+                    resultBody.appendChild(row);
+                });
+                
+                dom.resultCount.textContent = results.length;
+                dom.updateTime.textContent = new Date().toLocaleTimeString();
+            }
+            
+            // 处理API提供商变更
+            dom.apiProvider.addEventListener('change', function() {
+                const provider = this.value;
+                
+                // 显示/隐藏API Key输入框
+                if (provider === 'alpha') {
+                    dom.apiKeyField.style.display = 'block';
+                } else {
+                    dom.apiKeyField.style.display = 'none';
+                }
+                
+                // 显示/隐藏自定义API输入框
+                if (provider === 'custom') {
+                    dom.customApiField.style.display = 'block';
+                } else {
+                    dom.customApiField.style.display = 'none';
+                }
+                
+                // 更新API源名称显示
+                const providerNames = {
+                    mock: '模拟数据',
+                    sina: '新浪财经API',
+                    tencent: '腾讯财经API',
+                    alpha: 'Alpha Vantage',
+                    custom: '自定义API'
+                };
+                document.getElementById('apiSourceName').textContent = providerNames[provider] || '未知来源';
+            });
+            
+            // 保存设置
+            dom.saveSettings.addEventListener('click', function() {
+                StockAPIAdapter.currentProvider = dom.apiProvider.value;
+                StockAPIAdapter.apiKey = dom.apiKey.value;
+                StockAPIAdapter.customUrl = dom.customApiUrl.value;
+                
+                // 处理股票代码列表
+                const codeText = dom.stockCodes.value.trim();
+                if (codeText) {
+                    stockList = codeText.split('\n')
+                        .map(c => c.trim())
+                        .filter(c => c);
+                } else {
+                    // 默认股票池
+                    stockList = ["000001.SZ", "600000.SH", "000333.SZ", "600036.SH", "000651.SZ"];
+                }
+                
+                // 关闭模态框
+                bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+                
+                // 更新API状态
+                dom.apiStatus.className = "api-status api-inactive";
+                dom.apiStatus.textContent = "API待连接";
+                dom.apiHealthBar.style.width = "0%";
+                
+                // 立即刷新数据
+                runScreening();
+            });
+            
+            // 刷新间隔滑块
+            dom.refreshInterval.addEventListener('input', function() {
+                dom.intervalValue.textContent = this.value;
+                
+                // 如果自动刷新已启用，则更新间隔时间
+                if (dom.autoRefresh.checked) {
+                    clearInterval(autoRefreshInterval);
+                    startAutoRefresh();
+                }
+            });
+            
+            // 启动自动刷新
+            function startAutoRefresh() {
+                autoRefreshInterval = setInterval(() => {
+                    if (dom.autoRefresh.checked) {
+                        runScreening();
+                    }
+                }, dom.refreshInterval.value * 1000);
+            }
+            
+            // 绑定按钮事件
+            dom.runScreening.addEventListener('click', runScreening);
+            dom.refreshBtn.addEventListener('click', runScreening);
+            
+            // 初始化
+            initCharts();
+            runScreening();
+            startAutoRefresh();
+        });
+    </script>
+</body>
+</html>
